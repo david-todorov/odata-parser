@@ -18,8 +18,8 @@ public final class FilterLexer {
         this.currentPosition = 0;
     }
 
-    public List<Token> tokenize() {
-        List<Token> tokens = new ArrayList<>();
+    public List<FilterToken> tokenize() {
+        List<FilterToken> filterTokens = new ArrayList<>();
 
         while (!isAtEnd()) {
             skipWhitespace();
@@ -28,20 +28,20 @@ public final class FilterLexer {
                 break;
             }
 
-            tokens.add(readNextToken());
+            filterTokens.add(readNextToken());
         }
 
-        tokens.add(new Token(
-                TokenType.END_OF_INPUT,
+        filterTokens.add(new FilterToken(
+                FilterTokenType.END_OF_INPUT,
                 "",
                 currentPosition,
                 currentPosition
         ));
 
-        return List.copyOf(tokens);
+        return List.copyOf(filterTokens);
     }
 
-    private Token readNextToken() {
+    private FilterToken readNextToken() {
         char currentCharacter = currentCharacter();
 
         if (isIdentifierStart(currentCharacter)) {
@@ -60,7 +60,7 @@ public final class FilterLexer {
         return readStructuralToken();
     }
 
-    private Token readIdentifierOrKeyword() {
+    private FilterToken readIdentifierOrKeyword() {
         int start = currentPosition;
 
         advance();
@@ -71,9 +71,9 @@ public final class FilterLexer {
         }
 
         String lexeme = input.substring(start, currentPosition);
-        TokenType type = determineIdentifierType(lexeme);
+        FilterTokenType type = determineIdentifierType(lexeme);
 
-        return new Token(
+        return new FilterToken(
                 type,
                 lexeme,
                 start,
@@ -81,38 +81,38 @@ public final class FilterLexer {
         );
     }
 
-    private TokenType determineIdentifierType(String lexeme) {
+    private FilterTokenType determineIdentifierType(String lexeme) {
         return switch (lexeme) {
             // Logical operators
-            case "and" -> TokenType.AND;
-            case "or" -> TokenType.OR;
-            case "not" -> TokenType.NOT;
+            case "and" -> FilterTokenType.AND;
+            case "or" -> FilterTokenType.OR;
+            case "not" -> FilterTokenType.NOT;
 
             // Comparison operators
-            case "eq" -> TokenType.EQ;
-            case "ne" -> TokenType.NE;
-            case "gt" -> TokenType.GT;
-            case "ge" -> TokenType.GE;
-            case "lt" -> TokenType.LT;
-            case "le" -> TokenType.LE;
-            case "in" -> TokenType.IN;
+            case "eq" -> FilterTokenType.EQ;
+            case "ne" -> FilterTokenType.NE;
+            case "gt" -> FilterTokenType.GT;
+            case "ge" -> FilterTokenType.GE;
+            case "lt" -> FilterTokenType.LT;
+            case "le" -> FilterTokenType.LE;
+            case "in" -> FilterTokenType.IN;
 
             // Arithmetic operators
-            case "add" -> TokenType.ADD;
-            case "sub" -> TokenType.SUB;
-            case "mul" -> TokenType.MUL;
-            case "div" -> TokenType.DIV;
-            case "mod" -> TokenType.MOD;
+            case "add" -> FilterTokenType.ADD;
+            case "sub" -> FilterTokenType.SUB;
+            case "mul" -> FilterTokenType.MUL;
+            case "div" -> FilterTokenType.DIV;
+            case "mod" -> FilterTokenType.MOD;
 
             // Literal keywords
-            case "true", "false" -> TokenType.BOOLEAN;
-            case "null" -> TokenType.NULL;
+            case "true", "false" -> FilterTokenType.BOOLEAN;
+            case "null" -> FilterTokenType.NULL;
 
-            default -> TokenType.IDENTIFIER;
+            default -> FilterTokenType.IDENTIFIER;
         };
     }
 
-    private Token readNumber() {
+    private FilterToken readNumber() {
         int start = currentPosition;
 
         if (currentCharacter() == '-') {
@@ -124,13 +124,13 @@ public final class FilterLexer {
             advance();
         }
 
-        TokenType type = TokenType.INTEGER;
+        FilterTokenType type = FilterTokenType.INTEGER;
 
         if (!isAtEnd()
                 && currentCharacter() == '.'
                 && hasNextDigit()) {
 
-            type = TokenType.DECIMAL;
+            type = FilterTokenType.DECIMAL;
             advance();
 
             while (!isAtEnd()
@@ -141,7 +141,7 @@ public final class FilterLexer {
 
         String lexeme = input.substring(start, currentPosition);
 
-        return new Token(
+        return new FilterToken(
                 type,
                 lexeme,
                 start,
@@ -149,7 +149,7 @@ public final class FilterLexer {
         );
     }
 
-    private Token readString() {
+    private FilterToken readString() {
         int start = currentPosition;
 
         // Consume the opening apostrophe.
@@ -173,8 +173,8 @@ public final class FilterLexer {
 
             String lexeme = input.substring(start, currentPosition);
 
-            return new Token(
-                    TokenType.STRING,
+            return new FilterToken(
+                    FilterTokenType.STRING,
                     lexeme,
                     start,
                     currentPosition
@@ -187,15 +187,15 @@ public final class FilterLexer {
         );
     }
 
-    private Token readStructuralToken() {
+    private FilterToken readStructuralToken() {
         int start = currentPosition;
         char character = currentCharacter();
 
-        TokenType type = switch (character) {
-            case '(' -> TokenType.LEFT_PAREN;
-            case ')' -> TokenType.RIGHT_PAREN;
-            case ',' -> TokenType.COMMA;
-            case '/' -> TokenType.SLASH;
+        FilterTokenType type = switch (character) {
+            case '(' -> FilterTokenType.LEFT_PAREN;
+            case ')' -> FilterTokenType.RIGHT_PAREN;
+            case ',' -> FilterTokenType.COMMA;
+            case '/' -> FilterTokenType.SLASH;
 
             default -> throw new FilterLexerException(
                     "Unexpected character '" + character + "'",
@@ -205,7 +205,7 @@ public final class FilterLexer {
 
         advance();
 
-        return new Token(
+        return new FilterToken(
                 type,
                 String.valueOf(character),
                 start,

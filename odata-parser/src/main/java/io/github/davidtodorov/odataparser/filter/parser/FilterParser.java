@@ -1,9 +1,21 @@
 package io.github.davidtodorov.odataparser.filter.parser;
 
-import io.github.davidtodorov.odataparser.expression.ast.*;
+import io.github.davidtodorov.odataparser.filter.ast.BinaryFilterExpression;
+import io.github.davidtodorov.odataparser.filter.ast.BinaryOperator;
+import io.github.davidtodorov.odataparser.filter.ast.FilterExpression;
+import io.github.davidtodorov.odataparser.filter.ast.FunctionCallFilterExpression;
+import io.github.davidtodorov.odataparser.filter.ast.ListFilterExpression;
+import io.github.davidtodorov.odataparser.filter.ast.LiteralFilterExpression;
+import io.github.davidtodorov.odataparser.filter.ast.LiteralType;
+import io.github.davidtodorov.odataparser.filter.ast.PropertyFilterExpression;
+import io.github.davidtodorov.odataparser.filter.ast.UnaryFilterExpression;
+import io.github.davidtodorov.odataparser.filter.ast.UnaryOperator;
+import io.github.davidtodorov.odataparser.filter.metadata.ExpressionMetadata;
+import io.github.davidtodorov.odataparser.common.metadata.SourceSpan;
+import io.github.davidtodorov.odataparser.common.type.ExpressionType;
 import io.github.davidtodorov.odataparser.filter.lexer.FilterLexer;
-import io.github.davidtodorov.odataparser.filter.lexer.Token;
-import io.github.davidtodorov.odataparser.filter.lexer.TokenType;
+import io.github.davidtodorov.odataparser.filter.lexer.FilterToken;
+import io.github.davidtodorov.odataparser.filter.lexer.FilterTokenType;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -13,144 +25,115 @@ import java.util.Objects;
 
 public final class FilterParser {
 
-    private final List<Token> tokens;
+    private final List<FilterToken> filterTokens;
     private int currentIndex;
 
-    /**
-     * Convenience constructor that tokenizes the input before parsing.
-     *
-     * The input must contain only the filter expression, without "$filter=".
-     */
     public FilterParser(String input) {
         this(new FilterLexer(input).tokenize());
     }
 
-    /**
-     * Creates a parser from an existing token sequence.
-     */
-    public FilterParser(List<Token> tokens) {
+    public FilterParser(List<FilterToken> filterTokens) {
         Objects.requireNonNull(
-                tokens,
+                filterTokens,
                 "Token list cannot be null"
         );
 
-        if (tokens.isEmpty()) {
+        if (filterTokens.isEmpty()) {
             throw new IllegalArgumentException(
                     "Token list cannot be empty"
             );
         }
 
-        if (tokens.stream().anyMatch(Objects::isNull)) {
+        if (filterTokens.stream().anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException(
                     "Token list cannot contain null elements"
             );
         }
 
-        validateEndOfInputToken(tokens);
+        validateEndOfInputToken(filterTokens);
 
-        this.tokens = List.copyOf(tokens);
+        this.filterTokens = List.copyOf(filterTokens);
         this.currentIndex = 0;
     }
 
-    /**
-     * Parses the complete token sequence and returns the AST root.
-     */
-    public Expression parse() {
+    public FilterExpression parse() {
         currentIndex = 0;
 
-        Expression expression = parseExpression();
+        FilterExpression filterExpression = parseExpression();
 
-        if (!check(TokenType.END_OF_INPUT)) {
+        if (!check(FilterTokenType.END_OF_INPUT)) {
             throw error(
                     "Unexpected token after complete filter expression"
             );
         }
 
-        return expression;
+        return filterExpression;
     }
 
-    /**
-     * Entry point for the expression grammar.
-     */
-    private Expression parseExpression() {
+    private FilterExpression parseExpression() {
         return parseOrExpression();
     }
 
-    /**
-     * orExpression:
-     *     andExpression ("or" andExpression)*
-     */
-    private Expression parseOrExpression() {
-        Expression expression = parseAndExpression();
+    private FilterExpression parseOrExpression() {
+        FilterExpression filterExpression = parseAndExpression();
 
-        while (match(TokenType.OR)) {
-            Expression right = parseAndExpression();
+        while (match(FilterTokenType.OR)) {
+            FilterExpression right = parseAndExpression();
 
-            expression = new BinaryExpression(
-                    expression,
+            filterExpression = createBinaryExpression(
+                    filterExpression,
                     BinaryOperator.OR,
                     right
             );
         }
 
-        return expression;
+        return filterExpression;
     }
 
-    /**
-     * andExpression:
-     *     comparisonExpression ("and" comparisonExpression)*
-     */
-    private Expression parseAndExpression() {
-        Expression expression = parseComparisonExpression();
+    private FilterExpression parseAndExpression() {
+        FilterExpression filterExpression = parseComparisonExpression();
 
-        while (match(TokenType.AND)) {
-            Expression right = parseComparisonExpression();
+        while (match(FilterTokenType.AND)) {
+            FilterExpression right = parseComparisonExpression();
 
-            expression = new BinaryExpression(
-                    expression,
+            filterExpression = createBinaryExpression(
+                    filterExpression,
                     BinaryOperator.AND,
                     right
             );
         }
 
-        return expression;
+        return filterExpression;
     }
 
-    /**
-     * comparisonExpression:
-     *     additiveExpression
-     *     (comparisonOperator comparisonRightOperand)?
-     *
-     * Comparison operators are deliberately non-chainable.
-     */
-    private Expression parseComparisonExpression() {
-        Expression left = parseAdditiveExpression();
+    private FilterExpression parseComparisonExpression() {
+        FilterExpression left = parseAdditiveExpression();
 
         if (!match(
-                TokenType.EQ,
-                TokenType.NE,
-                TokenType.GT,
-                TokenType.GE,
-                TokenType.LT,
-                TokenType.LE,
-                TokenType.IN
+                FilterTokenType.EQ,
+                FilterTokenType.NE,
+                FilterTokenType.GT,
+                FilterTokenType.GE,
+                FilterTokenType.LT,
+                FilterTokenType.LE,
+                FilterTokenType.IN
         )) {
             return left;
         }
 
-        Token operatorToken = previous();
+        FilterToken operatorFilterToken = previous();
 
-        Expression right;
+        FilterExpression right;
 
-        if (operatorToken.type() == TokenType.IN) {
+        if (operatorFilterToken.type() == FilterTokenType.IN) {
             right = parseInList();
         } else {
             right = parseAdditiveExpression();
         }
 
-        Expression comparison = new BinaryExpression(
+        FilterExpression comparison = createBinaryExpression(
                 left,
-                toBinaryOperator(operatorToken),
+                toBinaryOperator(operatorFilterToken),
                 right
         );
 
@@ -163,246 +146,375 @@ public final class FilterParser {
         return comparison;
     }
 
-    /**
-     * additiveExpression:
-     *     multiplicativeExpression
-     *     (("add" | "sub") multiplicativeExpression)*
-     */
-    private Expression parseAdditiveExpression() {
-        Expression expression = parseMultiplicativeExpression();
+    private FilterExpression parseAdditiveExpression() {
+        FilterExpression filterExpression = parseMultiplicativeExpression();
 
-        while (match(TokenType.ADD, TokenType.SUB)) {
-            Token operatorToken = previous();
-            Expression right = parseMultiplicativeExpression();
+        while (match(FilterTokenType.ADD, FilterTokenType.SUB)) {
+            FilterToken operatorFilterToken = previous();
+            FilterExpression right = parseMultiplicativeExpression();
 
-            expression = new BinaryExpression(
-                    expression,
-                    toBinaryOperator(operatorToken),
+            filterExpression = createBinaryExpression(
+                    filterExpression,
+                    toBinaryOperator(operatorFilterToken),
                     right
             );
         }
 
-        return expression;
+        return filterExpression;
     }
 
-    /**
-     * multiplicativeExpression:
-     *     unaryExpression
-     *     (("mul" | "div" | "mod") unaryExpression)*
-     */
-    private Expression parseMultiplicativeExpression() {
-        Expression expression = parseUnaryExpression();
+    private FilterExpression parseMultiplicativeExpression() {
+        FilterExpression filterExpression = parseUnaryExpression();
 
         while (match(
-                TokenType.MUL,
-                TokenType.DIV,
-                TokenType.MOD
+                FilterTokenType.MUL,
+                FilterTokenType.DIV,
+                FilterTokenType.MOD
         )) {
-            Token operatorToken = previous();
-            Expression right = parseUnaryExpression();
+            FilterToken operatorFilterToken = previous();
+            FilterExpression right = parseUnaryExpression();
 
-            expression = new BinaryExpression(
-                    expression,
-                    toBinaryOperator(operatorToken),
+            filterExpression = createBinaryExpression(
+                    filterExpression,
+                    toBinaryOperator(operatorFilterToken),
                     right
             );
         }
 
-        return expression;
+        return filterExpression;
     }
 
-    /**
-     * unaryExpression:
-     *     "not" unaryExpression
-     *     | primaryExpression
-     */
-    private Expression parseUnaryExpression() {
-        if (match(TokenType.NOT)) {
-            return new UnaryExpression(
+    private FilterExpression parseUnaryExpression() {
+        if (match(FilterTokenType.NOT)) {
+            FilterToken operatorFilterToken = previous();
+            FilterExpression operand = parseUnaryExpression();
+
+            SourceSpan sourceSpan = new SourceSpan(
+                    operatorFilterToken.start(),
+                    operand.sourceSpan().end()
+            );
+
+            ExpressionMetadata metadata = new ExpressionMetadata(
+                    sourceSpan,
+                    ExpressionType.BOOLEAN
+            );
+
+            return new UnaryFilterExpression(
                     UnaryOperator.NOT,
-                    parseUnaryExpression()
+                    operand,
+                    metadata
             );
         }
 
         return parsePrimaryExpression();
     }
 
-    /**
-     * primaryExpression:
-     *     literal
-     *     | propertyPath
-     *     | functionCall
-     *     | "(" expression ")"
-     */
-    private Expression parsePrimaryExpression() {
+    private FilterExpression parsePrimaryExpression() {
         if (match(
-                TokenType.STRING,
-                TokenType.INTEGER,
-                TokenType.DECIMAL,
-                TokenType.BOOLEAN,
-                TokenType.NULL
+                FilterTokenType.STRING,
+                FilterTokenType.INTEGER,
+                FilterTokenType.DECIMAL,
+                FilterTokenType.BOOLEAN,
+                FilterTokenType.NULL
         )) {
             return createLiteralExpression(previous());
         }
 
-        if (match(TokenType.IDENTIFIER)) {
+        if (match(FilterTokenType.IDENTIFIER)) {
             return parseIdentifierExpression(previous());
         }
 
-        if (match(TokenType.LEFT_PAREN)) {
-            Expression groupedExpression = parseExpression();
+        if (match(FilterTokenType.LEFT_PAREN)) {
+            FilterToken openingParenthesis = previous();
 
-            consume(
-                    TokenType.RIGHT_PAREN,
+            FilterExpression groupedFilterExpression = parseExpression();
+
+            FilterToken closingParenthesis = consume(
+                    FilterTokenType.RIGHT_PAREN,
                     "Expected ')' after grouped expression"
             );
 
-            return groupedExpression;
+            SourceSpan groupedSpan = new SourceSpan(
+                    openingParenthesis.start(),
+                    closingParenthesis.end()
+            );
+
+            return withSourceSpan(
+                    groupedFilterExpression,
+                    groupedSpan
+            );
         }
 
         throw error("Expected an expression");
     }
 
-    /**
-     * An identifier may begin either:
-     *
-     * - a function call: contains(...)
-     * - a property: Price
-     * - a property path: Address/City
-     */
-    private Expression parseIdentifierExpression(
-            Token firstIdentifier
+    private FilterExpression parseIdentifierExpression(
+            FilterToken firstIdentifier
     ) {
-        if (match(TokenType.LEFT_PAREN)) {
-            return parseFunctionCall(firstIdentifier.lexeme());
+        if (match(FilterTokenType.LEFT_PAREN)) {
+            return parseFunctionCall(firstIdentifier);
         }
 
         List<String> pathSegments = new ArrayList<>();
         pathSegments.add(firstIdentifier.lexeme());
 
-        while (match(TokenType.SLASH)) {
-            Token segment = consume(
-                    TokenType.IDENTIFIER,
+        int pathEnd = firstIdentifier.end();
+
+        while (match(FilterTokenType.SLASH)) {
+            FilterToken pathSegment = consume(
+                    FilterTokenType.IDENTIFIER,
                     "Expected a property name after '/'"
             );
 
-            pathSegments.add(segment.lexeme());
+            pathSegments.add(pathSegment.lexeme());
+            pathEnd = pathSegment.end();
         }
 
-        return new PropertyExpression(pathSegments);
+        SourceSpan sourceSpan = new SourceSpan(
+                firstIdentifier.start(),
+                pathEnd
+        );
+
+        return new PropertyFilterExpression(
+                pathSegments,
+                ExpressionMetadata.unresolved(sourceSpan)
+        );
     }
 
-    /**
-     * Parses a function after its opening parenthesis
-     * has already been consumed.
-     */
-    private Expression parseFunctionCall(String functionName) {
-        List<Expression> arguments = new ArrayList<>();
+    private FilterExpression parseFunctionCall(
+            FilterToken functionNameFilterToken
+    ) {
+        List<FilterExpression> arguments = new ArrayList<>();
 
-        if (!check(TokenType.RIGHT_PAREN)) {
+        if (!check(FilterTokenType.RIGHT_PAREN)) {
             do {
                 arguments.add(parseExpression());
-            } while (match(TokenType.COMMA));
+            } while (match(FilterTokenType.COMMA));
         }
 
-        consume(
-                TokenType.RIGHT_PAREN,
+        FilterToken closingParenthesis = consume(
+                FilterTokenType.RIGHT_PAREN,
                 "Expected ')' after function arguments"
         );
 
-        return new FunctionCallExpression(
-                functionName,
-                arguments
+        SourceSpan sourceSpan = new SourceSpan(
+                functionNameFilterToken.start(),
+                closingParenthesis.end()
+        );
+
+        return new FunctionCallFilterExpression(
+                functionNameFilterToken.lexeme(),
+                arguments,
+                ExpressionMetadata.unresolved(sourceSpan)
         );
     }
 
-    /**
-     * Parses the right side of the "in" operator.
-     *
-     * Example:
-     * ('Ulm', 'Berlin')
-     */
-    private Expression parseInList() {
-        consume(
-                TokenType.LEFT_PAREN,
+    private FilterExpression parseInList() {
+        FilterToken openingParenthesis = consume(
+                FilterTokenType.LEFT_PAREN,
                 "Expected '(' after 'in'"
         );
 
-        if (check(TokenType.RIGHT_PAREN)) {
+        if (check(FilterTokenType.RIGHT_PAREN)) {
             throw error(
                     "The 'in' operator requires at least one list element"
             );
         }
 
-        List<Expression> elements = new ArrayList<>();
+        List<FilterExpression> elements = new ArrayList<>();
 
         do {
             elements.add(parseExpression());
-        } while (match(TokenType.COMMA));
+        } while (match(FilterTokenType.COMMA));
 
-        consume(
-                TokenType.RIGHT_PAREN,
+        FilterToken closingParenthesis = consume(
+                FilterTokenType.RIGHT_PAREN,
                 "Expected ')' after 'in' list"
         );
 
-        return new ListExpression(elements);
+        SourceSpan sourceSpan = new SourceSpan(
+                openingParenthesis.start(),
+                closingParenthesis.end()
+        );
+
+        ExpressionMetadata metadata = new ExpressionMetadata(
+                sourceSpan,
+                ExpressionType.COLLECTION
+        );
+
+        return new ListFilterExpression(
+                elements,
+                metadata
+        );
     }
 
-    private LiteralExpression createLiteralExpression(Token token) {
+    private BinaryFilterExpression createBinaryExpression(
+            FilterExpression left,
+            BinaryOperator operator,
+            FilterExpression right
+    ) {
+        SourceSpan sourceSpan = left.sourceSpan()
+                .cover(right.sourceSpan());
+
+        ExpressionType expressionType = switch (operator) {
+            case AND, OR,
+                 EQ, NE, GT, GE, LT, LE, IN ->
+                    ExpressionType.BOOLEAN;
+
+            case ADD, SUB, MUL, DIV, MOD ->
+                    ExpressionType.UNKNOWN;
+        };
+
+        ExpressionMetadata metadata = new ExpressionMetadata(
+                sourceSpan,
+                expressionType
+        );
+
+        return new BinaryFilterExpression(
+                left,
+                operator,
+                right,
+                metadata
+        );
+    }
+
+    private LiteralFilterExpression createLiteralExpression(
+            FilterToken filterToken
+    ) {
+        SourceSpan sourceSpan = new SourceSpan(
+                filterToken.start(),
+                filterToken.end()
+        );
+
         try {
-            return switch (token.type()) {
-                case STRING -> new LiteralExpression(
+            return switch (filterToken.type()) {
+                case STRING -> new LiteralFilterExpression(
                         LiteralType.STRING,
-                        decodeString(token.lexeme()),
-                        token.lexeme()
+                        decodeString(filterToken.lexeme()),
+                        filterToken.lexeme(),
+                        new ExpressionMetadata(
+                                sourceSpan,
+                                ExpressionType.STRING
+                        )
                 );
 
-                case INTEGER -> new LiteralExpression(
+                case INTEGER -> new LiteralFilterExpression(
                         LiteralType.INTEGER,
-                        new BigInteger(token.lexeme()),
-                        token.lexeme()
+                        new BigInteger(filterToken.lexeme()),
+                        filterToken.lexeme(),
+                        new ExpressionMetadata(
+                                sourceSpan,
+                                ExpressionType.INTEGER
+                        )
                 );
 
-                case DECIMAL -> new LiteralExpression(
+                case DECIMAL -> new LiteralFilterExpression(
                         LiteralType.DECIMAL,
-                        new BigDecimal(token.lexeme()),
-                        token.lexeme()
+                        new BigDecimal(filterToken.lexeme()),
+                        filterToken.lexeme(),
+                        new ExpressionMetadata(
+                                sourceSpan,
+                                ExpressionType.DECIMAL
+                        )
                 );
 
-                case BOOLEAN -> new LiteralExpression(
+                case BOOLEAN -> new LiteralFilterExpression(
                         LiteralType.BOOLEAN,
-                        Boolean.parseBoolean(token.lexeme()),
-                        token.lexeme()
+                        Boolean.parseBoolean(filterToken.lexeme()),
+                        filterToken.lexeme(),
+                        new ExpressionMetadata(
+                                sourceSpan,
+                                ExpressionType.BOOLEAN
+                        )
                 );
 
-                case NULL -> new LiteralExpression(
+                case NULL -> new LiteralFilterExpression(
                         LiteralType.NULL,
                         null,
-                        token.lexeme()
+                        filterToken.lexeme(),
+                        new ExpressionMetadata(
+                                sourceSpan,
+                                ExpressionType.NULL
+                        )
                 );
 
                 default -> throw new IllegalStateException(
-                        "Token is not a literal: " + token.type()
+                        "Token is not a literal: " + filterToken.type()
                 );
             };
         } catch (NumberFormatException exception) {
             throw new FilterParserException(
                     "Invalid numeric literal",
-                    token,
+                    filterToken,
                     exception
             );
         }
     }
 
-    /**
-     * Converts:
-     *
-     * 'O''Brien'
-     *
-     * into:
-     *
-     * O'Brien
-     */
+    private FilterExpression withSourceSpan(
+            FilterExpression filterExpression,
+            SourceSpan sourceSpan
+    ) {
+        ExpressionMetadata metadata = new ExpressionMetadata(
+                sourceSpan,
+                filterExpression.expressionType()
+        );
+
+        if (filterExpression instanceof BinaryFilterExpression binary) {
+            return new BinaryFilterExpression(
+                    binary.left(),
+                    binary.operator(),
+                    binary.right(),
+                    metadata
+            );
+        }
+
+        if (filterExpression instanceof UnaryFilterExpression unary) {
+            return new UnaryFilterExpression(
+                    unary.operator(),
+                    unary.operand(),
+                    metadata
+            );
+        }
+
+        if (filterExpression instanceof LiteralFilterExpression literal) {
+            return new LiteralFilterExpression(
+                    literal.literalType(),
+                    literal.value(),
+                    literal.rawText(),
+                    metadata
+            );
+        }
+
+        if (filterExpression instanceof PropertyFilterExpression property) {
+            return new PropertyFilterExpression(
+                    property.pathSegments(),
+                    property.resolvedPath(),
+                    metadata
+            );
+        }
+
+        if (filterExpression instanceof FunctionCallFilterExpression function) {
+            return new FunctionCallFilterExpression(
+                    function.functionName(),
+                    function.arguments(),
+                    metadata
+            );
+        }
+
+        if (filterExpression instanceof ListFilterExpression list) {
+            return new ListFilterExpression(
+                    list.elements(),
+                    metadata
+            );
+        }
+
+        throw new IllegalStateException(
+                "Unsupported expression type: "
+                        + filterExpression.getClass().getName()
+        );
+    }
+
     private String decodeString(String lexeme) {
         String content = lexeme.substring(
                 1,
@@ -412,8 +524,8 @@ public final class FilterParser {
         return content.replace("''", "'");
     }
 
-    private BinaryOperator toBinaryOperator(Token token) {
-        return switch (token.type()) {
+    private BinaryOperator toBinaryOperator(FilterToken filterToken) {
+        return switch (filterToken.type()) {
             case AND -> BinaryOperator.AND;
             case OR -> BinaryOperator.OR;
 
@@ -433,25 +545,21 @@ public final class FilterParser {
 
             default -> throw new IllegalArgumentException(
                     "Token is not a binary operator: "
-                            + token.type()
+                            + filterToken.type()
             );
         };
     }
 
-    private boolean isComparisonOperator(TokenType type) {
+    private boolean isComparisonOperator(FilterTokenType type) {
         return switch (type) {
             case EQ, NE, GT, GE, LT, LE, IN -> true;
             default -> false;
         };
     }
 
-    /**
-     * Returns true and consumes the current token when its type
-     * matches one of the provided types.
-     */
-    private boolean match(TokenType... tokenTypes) {
-        for (TokenType tokenType : tokenTypes) {
-            if (check(tokenType)) {
+    private boolean match(FilterTokenType... filterTokenTypes) {
+        for (FilterTokenType filterTokenType : filterTokenTypes) {
+            if (check(filterTokenType)) {
                 advance();
                 return true;
             }
@@ -460,11 +568,8 @@ public final class FilterParser {
         return false;
     }
 
-    /**
-     * Requires a specific token type and consumes it.
-     */
-    private Token consume(
-            TokenType expectedType,
+    private FilterToken consume(
+            FilterTokenType expectedType,
             String errorMessage
     ) {
         if (check(expectedType)) {
@@ -474,36 +579,31 @@ public final class FilterParser {
         throw error(errorMessage);
     }
 
-    private boolean check(TokenType tokenType) {
-        return currentToken().type() == tokenType;
+    private boolean check(FilterTokenType filterTokenType) {
+        return currentToken().type() == filterTokenType;
     }
 
-    /**
-     * Consumes and returns the current token.
-     *
-     * The end-of-input token is never consumed.
-     */
-    private Token advance() {
-        Token token = currentToken();
+    private FilterToken advance() {
+        FilterToken filterToken = currentToken();
 
         if (!isAtEnd()) {
             currentIndex++;
         }
 
-        return token;
+        return filterToken;
     }
 
     private boolean isAtEnd() {
         return currentToken().type()
-                == TokenType.END_OF_INPUT;
+                == FilterTokenType.END_OF_INPUT;
     }
 
-    private Token currentToken() {
-        return tokens.get(currentIndex);
+    private FilterToken currentToken() {
+        return filterTokens.get(currentIndex);
     }
 
-    private Token previous() {
-        return tokens.get(currentIndex - 1);
+    private FilterToken previous() {
+        return filterTokens.get(currentIndex - 1);
     }
 
     private FilterParserException error(String message) {
@@ -514,19 +614,19 @@ public final class FilterParser {
     }
 
     private static void validateEndOfInputToken(
-            List<Token> tokens
+            List<FilterToken> filterTokens
     ) {
-        Token lastToken = tokens.get(tokens.size() - 1);
+        FilterToken lastFilterToken = filterTokens.get(filterTokens.size() - 1);
 
-        if (lastToken.type() != TokenType.END_OF_INPUT) {
+        if (lastFilterToken.type() != FilterTokenType.END_OF_INPUT) {
             throw new IllegalArgumentException(
                     "Token sequence must end with END_OF_INPUT"
             );
         }
 
-        for (int index = 0; index < tokens.size() - 1; index++) {
-            if (tokens.get(index).type()
-                    == TokenType.END_OF_INPUT) {
+        for (int index = 0; index < filterTokens.size() - 1; index++) {
+            if (filterTokens.get(index).type()
+                    == FilterTokenType.END_OF_INPUT) {
                 throw new IllegalArgumentException(
                         "END_OF_INPUT may appear only as the last token"
                 );

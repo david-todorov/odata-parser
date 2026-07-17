@@ -1,41 +1,41 @@
 package io.github.davidtodorov.odataparser.filter.parser;
 
-import io.github.davidtodorov.odataparser.filter.lexer.Token;
-import io.github.davidtodorov.odataparser.filter.lexer.TokenType;
+import io.github.davidtodorov.odataparser.filter.lexer.FilterToken;
+import io.github.davidtodorov.odataparser.filter.lexer.FilterTokenType;
 
 import java.util.Objects;
 
 public class FilterParserException extends RuntimeException {
 
-    private final Token token;
+    private final FilterToken filterToken;
 
-    public FilterParserException(String message, Token token) {
-        this(message, token, null);
+    public FilterParserException(String message, FilterToken filterToken) {
+        this(message, filterToken, null);
     }
 
     public FilterParserException(
             String message,
-            Token token,
+            FilterToken filterToken,
             Throwable cause
     ) {
-        super(createMessage(message, token), cause);
-        this.token = token;
+        super(createMessage(message, filterToken), cause);
+        this.filterToken = filterToken;
     }
 
-    public Token token() {
-        return token;
+    public FilterToken token() {
+        return filterToken;
     }
 
     public int position() {
-        return token.start();
+        return filterToken.start();
     }
 
     private static String createMessage(
             String message,
-            Token token
+            FilterToken filterToken
     ) {
         Objects.requireNonNull(
-                token,
+                filterToken,
                 "Error token cannot be null"
         );
 
@@ -45,13 +45,13 @@ public class FilterParserException extends RuntimeException {
             );
         }
 
-        String found = token.type() == TokenType.END_OF_INPUT
+        String found = filterToken.type() == FilterTokenType.END_OF_INPUT
                 ? "end of input"
-                : "'" + token.lexeme() + "' (" + token.type() + ")";
+                : "'" + filterToken.lexeme() + "' (" + filterToken.type() + ")";
 
         return message
                 + " at position "
-                + token.start()
+                + filterToken.start()
                 + ". Found "
                 + found
                 + ".";

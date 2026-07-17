@@ -1,7 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="51d6524a-09c0-4709-abce-dd61cc0c9ab3" name="Changes" comment="" />
+    <list default="true" id="51d6524a-09c0-4709-abce-dd61cc0c9ab3" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/odata-parser.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/odata-parser.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/odata-parser/src/main/java/io/github/davidtodorov/odataparser/Main.java" beforeDir="false" afterPath="$PROJECT_DIR$/odata-parser/src/main/java/io/github/davidtodorov/odataparser/Main.java" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -10,22 +13,22 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
-  "lastFilter": {
-    "state": "OPEN",
-    "assignee": "david-todorov"
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {
+    &quot;state&quot;: &quot;OPEN&quot;,
+    &quot;assignee&quot;: &quot;david-todorov&quot;
   }
-}]]></component>
+}</component>
   <component name="GithubPullRequestsUISettings"><![CDATA[{
   "selectedUrlAndAccountId": {
     "url": "https://github.com/david-todorov/odata-parser.git",
-    "accountId": "543303db-1cf3-49f8-b226-09a7a24b46a3"
+    "accountId": "ef8b3172-c5eb-4804-9491-66f78d6dc608"
   }
 }]]></component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 7,
-  "fromUser": false
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 7,
+  &quot;fromUser&quot;: false
+}</component>
   <component name="ProjectId" id="3GdmkjtY9Y2eoOGggjPZdayuHKx" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -33,11 +36,13 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Application.Main.executor": "Run",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "RunOnceActivity.typescript.service.memoryLimit.init": "true",
     "codeWithMe.voiceChat.enabledByDefault": "false",
+    "ignore.virus.scanning.warn.message": "true",
     "kotlin-language-version-configured": "true",
     "last_opened_file_path": "/home/david/Workspace/odata-parser"
   }
