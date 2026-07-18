@@ -19,6 +19,9 @@ public final class FilterLexer {
     }
 
     public List<FilterToken> tokenize() {
+
+        currentPosition = 0;
+
         List<FilterToken> filterTokens = new ArrayList<>();
 
         while (!isAtEnd()) {
