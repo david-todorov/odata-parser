@@ -11,10 +11,9 @@ import io.github.davidtodorov.odataparser.filter.ast.LiteralType;
 import io.github.davidtodorov.odataparser.filter.ast.PropertyFilterExpression;
 import io.github.davidtodorov.odataparser.filter.ast.UnaryFilterExpression;
 import io.github.davidtodorov.odataparser.filter.metadata.ExpressionMetadata;
-import io.github.davidtodorov.odataparser.schema.EntitySchema;
-import io.github.davidtodorov.odataparser.schema.ResolvedPropertyPath;
-import io.github.davidtodorov.odataparser.schema.SchemaRegistry;
-import io.github.davidtodorov.odataparser.schema.resolver.PropertyPathResolver;
+import io.github.davidtodorov.odataparser.meta.EntityMetadata;
+import io.github.davidtodorov.odataparser.meta.path.ResolvedMetadataPath;
+import io.github.davidtodorov.odataparser.meta.resolver.MetadataPropertyPathResolver;
 
 import java.util.List;
 import java.util.Locale;
@@ -23,33 +22,23 @@ import java.util.Objects;
 public final class FilterExpressionResolver
         implements FilterExpressionVisitor<FilterExpression> {
 
-    private final PropertyPathResolver propertyPathResolver;
-
-    public FilterExpressionResolver(EntitySchema rootSchema) {
-        this(
-                rootSchema,
-                SchemaRegistry.of(rootSchema)
-        );
-    }
+    private final MetadataPropertyPathResolver propertyPathResolver;
 
     public FilterExpressionResolver(
-            EntitySchema rootSchema,
-            SchemaRegistry schemaRegistry
+            EntityMetadata<?> rootMetadata
     ) {
         this.propertyPathResolver =
-                new PropertyPathResolver(
+                new MetadataPropertyPathResolver(
                         Objects.requireNonNull(
-                                rootSchema,
-                                "Root entity schema cannot be null"
-                        ),
-                        Objects.requireNonNull(
-                                schemaRegistry,
-                                "Schema registry cannot be null"
+                                rootMetadata,
+                                "Root entity metadata cannot be null"
                         )
                 );
     }
 
-    public FilterExpression resolve(FilterExpression root) {
+    public FilterExpression resolve(
+            FilterExpression root
+    ) {
         Objects.requireNonNull(
                 root,
                 "Root expression cannot be null"
@@ -77,7 +66,7 @@ public final class FilterExpressionResolver
             PropertyFilterExpression expression
     ) {
         try {
-            ResolvedPropertyPath resolvedPath =
+            ResolvedMetadataPath resolvedPath =
                     propertyPathResolver.resolve(
                             expression.pathSegments()
                     );
@@ -85,7 +74,6 @@ public final class FilterExpressionResolver
             return expression.withResolvedPath(
                     resolvedPath
             );
-
         } catch (IllegalArgumentException exception) {
             throw new FilterSemanticException(
                     exception.getMessage(),
@@ -365,14 +353,18 @@ public final class FilterExpressionResolver
             FilterExpression left,
             FilterExpression right
     ) {
-        if (!(right instanceof ListFilterExpression listExpression)) {
+        if (!(right
+                instanceof ListFilterExpression listExpression)) {
+
             throw new FilterSemanticException(
                     "The right operand of 'in' must be a list",
                     right
             );
         }
 
-        for (FilterExpression element : listExpression.elements()) {
+        for (FilterExpression element
+                : listExpression.elements()) {
+
             if (!areEqualityCompatible(
                     left.expressionType(),
                     element.expressionType()
@@ -510,16 +502,18 @@ public final class FilterExpressionResolver
     }
 
     private void requireType(
-            FilterExpression filterExpression,
+            FilterExpression expression,
             ExpressionType requiredType,
             String message
     ) {
-        if (filterExpression.expressionType() != requiredType) {
+        if (expression.expressionType()
+                != requiredType) {
+
             throw new FilterSemanticException(
                     message
                             + ", but was "
-                            + filterExpression.expressionType(),
-                    filterExpression
+                            + expression.expressionType(),
+                    expression
             );
         }
     }

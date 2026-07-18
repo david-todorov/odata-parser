@@ -1,29 +1,30 @@
-package io.github.davidtodorov.odataparser.schema;
+package io.github.davidtodorov.odataparser.meta.path;
 
 import io.github.davidtodorov.odataparser.common.type.ExpressionType;
+import io.github.davidtodorov.odataparser.meta.EntityMetadata;
 
 import java.util.List;
 import java.util.Objects;
 
-public record ResolvedPropertyPath(
-        List<ResolvedPathSegment> segments
+public record ResolvedMetadataPath(
+        List<ResolvedMetadataPathSegment> segments
 ) {
 
-    public ResolvedPropertyPath {
+    public ResolvedMetadataPath {
         Objects.requireNonNull(
                 segments,
-                "Resolved path segments cannot be null"
+                "Resolved metadata path segments cannot be null"
         );
 
         if (segments.isEmpty()) {
             throw new IllegalArgumentException(
-                    "A resolved property path must contain at least one segment"
+                    "A resolved metadata path must contain at least one segment"
             );
         }
 
         if (segments.stream().anyMatch(Objects::isNull)) {
             throw new IllegalArgumentException(
-                    "Resolved property path cannot contain null segments"
+                    "A resolved metadata path cannot contain null segments"
             );
         }
 
@@ -32,36 +33,52 @@ public record ResolvedPropertyPath(
         validateSegments(segments);
     }
 
-    public ResolvedPathSegment leaf() {
+    public ResolvedMetadataPathSegment rootSegment() {
+        return segments.getFirst();
+    }
+
+    public ResolvedMetadataPathSegment leaf() {
         return segments.getLast();
     }
 
+    public EntityMetadata<?> rootMetadata() {
+        return rootSegment().declaringMetadata();
+    }
+
     public String externalPath() {
-        return String.join("/", externalSegments());
+        return String.join(
+                "/",
+                externalSegments()
+        );
     }
 
     public String mappedPath() {
-        return String.join("/", mappedSegments());
+        return String.join(
+                "/",
+                mappedSegments()
+        );
     }
 
     public List<String> externalSegments() {
         return segments.stream()
-                .map(ResolvedPathSegment::externalName)
+                .map(ResolvedMetadataPathSegment::externalName)
                 .toList();
     }
 
     public List<String> mappedSegments() {
         return segments.stream()
-                .map(ResolvedPathSegment::mappedName)
+                .map(ResolvedMetadataPathSegment::mappedName)
                 .toList();
     }
 
     public ExpressionType expressionType() {
         return leaf()
                 .expressionType()
-                .orElseThrow(() -> new IllegalStateException(
-                        "Resolved property path leaf has no expression type"
-                ));
+                .orElseThrow(
+                        () -> new IllegalStateException(
+                                "Resolved metadata path leaf has no expression type"
+                        )
+                );
     }
 
     public Class<?> javaType() {
@@ -70,19 +87,25 @@ public record ResolvedPropertyPath(
 
     public boolean containsNavigation() {
         return segments.stream()
-                .anyMatch(ResolvedPathSegment::isNavigation);
+                .anyMatch(
+                        ResolvedMetadataPathSegment::isNavigation
+                );
+    }
+
+    public int size() {
+        return segments.size();
     }
 
     private static void validateSegments(
-            List<ResolvedPathSegment> segments
+            List<ResolvedMetadataPathSegment> segments
     ) {
         int lastIndex = segments.size() - 1;
 
         for (int index = 0; index < segments.size(); index++) {
-            ResolvedPathSegment current = segments.get(index);
-            boolean isLeaf = index == lastIndex;
+            ResolvedMetadataPathSegment current =
+                    segments.get(index);
 
-            if (isLeaf) {
+            if (index == lastIndex) {
                 validateLeaf(current);
             } else {
                 validateIntermediateSegment(
@@ -94,7 +117,7 @@ public record ResolvedPropertyPath(
     }
 
     private static void validateLeaf(
-            ResolvedPathSegment leaf
+            ResolvedMetadataPathSegment leaf
     ) {
         if (!leaf.isPrimitive()) {
             throw new IllegalArgumentException(
@@ -104,22 +127,18 @@ public record ResolvedPropertyPath(
             );
         }
 
-        if (leaf.isCollection()) {
-            throw new IllegalArgumentException(
-                    "The final primitive property cannot be a collection"
-            );
-        }
-
         if (leaf.expressionType().isEmpty()) {
             throw new IllegalArgumentException(
-                    "The final primitive property must define an expression type"
+                    "The final primitive property '"
+                            + leaf.externalName()
+                            + "' must define an expression type"
             );
         }
     }
 
     private static void validateIntermediateSegment(
-            ResolvedPathSegment current,
-            ResolvedPathSegment next
+            ResolvedMetadataPathSegment current,
+            ResolvedMetadataPathSegment next
     ) {
         if (!current.isNavigation()) {
             throw new IllegalArgumentException(
@@ -137,22 +156,27 @@ public record ResolvedPropertyPath(
             );
         }
 
-        String expectedTargetSchema = current
-                .targetSchemaName()
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Navigation property '"
-                                + current.externalName()
-                                + "' has no target schema"
-                ));
+        EntityMetadata<?> expectedTarget =
+                current.targetMetadata()
+                        .orElseThrow(
+                                () -> new IllegalArgumentException(
+                                        "Navigation property '"
+                                                + current.externalName()
+                                                + "' has no target metadata"
+                                )
+                        );
 
-        if (!expectedTargetSchema.equals(next.declaringSchemaName())) {
+        EntityMetadata<?> actualDeclaringMetadata =
+                next.declaringMetadata();
+
+        if (expectedTarget != actualDeclaringMetadata) {
             throw new IllegalArgumentException(
                     "Navigation property '"
                             + current.externalName()
-                            + "' targets schema '"
-                            + expectedTargetSchema
-                            + "', but the next segment is declared by schema '"
-                            + next.declaringSchemaName()
+                            + "' targets metadata '"
+                            + expectedTarget.name()
+                            + "', but the next segment is declared by metadata '"
+                            + actualDeclaringMetadata.name()
                             + "'"
             );
         }

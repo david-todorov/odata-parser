@@ -1,18 +1,21 @@
 package io.github.davidtodorov.odataparser;
 
-import io.github.davidtodorov.odataparser.demo.CaseSchemaFactory;
-import io.github.davidtodorov.odataparser.demo.DepartmentSchemaFactory;
-import io.github.davidtodorov.odataparser.demo.UserSchemaFactory;
+import io.github.davidtodorov.odataparser.demo.CaseModel;
+import io.github.davidtodorov.odataparser.demo.DepartmentModel;
+import io.github.davidtodorov.odataparser.demo.UserModel;
 import io.github.davidtodorov.odataparser.filter.ast.FilterExpression;
 import io.github.davidtodorov.odataparser.filter.parser.FilterParser;
 import io.github.davidtodorov.odataparser.filter.semantic.FilterExpressionResolver;
 import io.github.davidtodorov.odataparser.filter.visitor.FilterAstPrinter;
+import io.github.davidtodorov.odataparser.meta.*;
+import io.github.davidtodorov.odataparser.meta.demo.CaseMetadata;
+import io.github.davidtodorov.odataparser.meta.demo.DepartmentMetadata;
+import io.github.davidtodorov.odataparser.meta.demo.UserMetadata;
+import io.github.davidtodorov.odataparser.orderby.ast.OrderByItem;
 import io.github.davidtodorov.odataparser.orderby.ast.OrderByOption;
 import io.github.davidtodorov.odataparser.orderby.parser.OrderByParser;
 import io.github.davidtodorov.odataparser.orderby.semantic.OrderByResolver;
 import io.github.davidtodorov.odataparser.orderby.visitor.OrderByAstPrinter;
-import io.github.davidtodorov.odataparser.schema.EntitySchema;
-import io.github.davidtodorov.odataparser.schema.SchemaRegistry;
 import io.github.davidtodorov.odataparser.search.ast.SearchExpression;
 import io.github.davidtodorov.odataparser.search.lexer.SearchLexer;
 import io.github.davidtodorov.odataparser.search.lexer.SearchToken;
@@ -23,7 +26,7 @@ import java.util.List;
 
 public final class Main {
 
-    private static final int OUTPUT_WIDTH = 88;
+    private static final int OUTPUT_WIDTH = 100;
 
     private static int passedChecks;
     private static int failedChecks;
@@ -32,60 +35,225 @@ public final class Main {
     }
 
     public static void main(String[] args) {
-        EntitySchema caseSchema =
-                CaseSchemaFactory.create();
+        DepartmentMetadata departmentMetadata =
+                new DepartmentMetadata();
 
-        EntitySchema userSchema =
-                UserSchemaFactory.create();
+        UserMetadata userMetadata =
+                new UserMetadata();
 
-        EntitySchema departmentSchema =
-                DepartmentSchemaFactory.create();
+        CaseMetadata caseMetadata =
+                new CaseMetadata();
 
-        SchemaRegistry registry =
-                SchemaRegistry.of(
-                        caseSchema,
-                        userSchema,
-                        departmentSchema
+        MetadataRegistry registry =
+                MetadataRegistry.of(
+                        caseMetadata,
+                        userMetadata,
+                        departmentMetadata
                 );
 
         printApplicationHeader();
 
-        runSuccessfulDemo(
-                "$filter valid expression",
-                () -> demonstrateFilter(
-                        caseSchema,
-                        registry
+        runSuccessfulCheck(
+                "Connected metadata graph",
+                () -> demonstrateMetadataGraph(
+                        registry,
+                        caseMetadata,
+                        userMetadata,
+                        departmentMetadata
                 )
         );
 
-        runSuccessfulDemo(
-                "$orderby valid expression",
-                () -> demonstrateOrderBy(
-                        caseSchema,
-                        registry
-                )
+        runSuccessfulCheck(
+                "$filter with connected metadata",
+                () -> demonstrateFilter(caseMetadata)
         );
 
-        runSuccessfulDemo(
-                "$search valid expression",
+        runSuccessfulCheck(
+                "$orderby with connected metadata",
+                () -> demonstrateOrderBy(caseMetadata)
+        );
+
+        runSuccessfulCheck(
+                "$search parsing",
                 Main::demonstrateSearch
         );
 
-        demonstrateExpectedFailures(
-                caseSchema,
-                registry
-        );
+        demonstrateExpectedFailures(caseMetadata);
 
         printFinalSummary();
     }
 
-    // -------------------------------------------------------------------------
-    // $filter
-    // -------------------------------------------------------------------------
+    private static void demonstrateMetadataGraph(
+            MetadataRegistry registry,
+            EntityMetadata<CaseModel> caseMetadata,
+            EntityMetadata<UserModel> userMetadata,
+            EntityMetadata<DepartmentModel> departmentMetadata
+    ) {
+        printInputHeader("METADATA REGISTRY");
+
+        System.out.println("Registered metadata count: " + registry.size());
+        System.out.println("Registered names: " + registry.byName().keySet());
+        System.out.println();
+
+        for (EntityMetadata<?> metadata : registry.all()) {
+            printEntityMetadata(metadata);
+        }
+
+        NavigationPropertyMetadata<CaseModel, UserModel> owner =
+                requireNavigation(
+                        caseMetadata,
+                        "Owner",
+                        UserModel.class
+                );
+
+        NavigationPropertyMetadata<CaseModel, UserModel> reviewer =
+                requireNavigation(
+                        caseMetadata,
+                        "Reviewer",
+                        UserModel.class
+                );
+
+        NavigationPropertyMetadata<CaseModel, DepartmentModel>
+                caseDepartment =
+                requireNavigation(
+                        caseMetadata,
+                        "Department",
+                        DepartmentModel.class
+                );
+
+        NavigationPropertyMetadata<UserModel, DepartmentModel>
+                userDepartment =
+                requireNavigation(
+                        userMetadata,
+                        "Department",
+                        DepartmentModel.class
+                );
+
+        printSmallHeader("DIRECT CONNECTION CHECKS");
+
+        verify(
+                "Case.Owner directly references UserMetadata",
+                owner.targetMetadata() == userMetadata
+        );
+
+        verify(
+                "Case.Reviewer directly references UserMetadata",
+                reviewer.targetMetadata() == userMetadata
+        );
+
+        verify(
+                "Owner and Reviewer reuse the same metadata instance",
+                owner.targetMetadata()
+                        == reviewer.targetMetadata()
+        );
+
+        verify(
+                "Case.Department directly references DepartmentMetadata",
+                caseDepartment.targetMetadata()
+                        == departmentMetadata
+        );
+
+        verify(
+                "User.Department reuses the same DepartmentMetadata",
+                userDepartment.targetMetadata()
+                        == departmentMetadata
+        );
+
+
+        printSmallHeader("JOIN POLICY CHECKS");
+
+        verify(
+                "Case.Owner defaults to LEFT join",
+                owner.defaultJoinType()
+                        == NavigationJoinType.LEFT
+        );
+
+        verify(
+                "Case.Owner join type is overridable",
+                owner.isJoinTypeOverridable()
+        );
+
+        verify(
+                "Case.Reviewer defaults to LEFT join",
+                reviewer.defaultJoinType()
+                        == NavigationJoinType.LEFT
+        );
+
+        verify(
+                "Case.Department defaults to LEFT join",
+                caseDepartment.defaultJoinType()
+                        == NavigationJoinType.LEFT
+        );
+
+        verify(
+                "User.Department defaults to LEFT join",
+                userDepartment.defaultJoinType()
+                        == NavigationJoinType.LEFT
+        );
+    }
+
+    private static void printEntityMetadata(
+            EntityMetadata<?> metadata
+    ) {
+        System.out.println(
+                metadata.name()
+                        + " | entity-type="
+                        + metadata.entityType().getTypeName()
+                        + " | property-count="
+                        + metadata.propertyCount()
+        );
+
+        for (PropertyMetadata<?, ?> property
+                : metadata.properties().values()) {
+
+            if (property
+                    instanceof PrimitivePropertyMetadata<?, ?> primitive) {
+
+                System.out.println(
+                        "  PRIMITIVE "
+                                + primitive.externalName()
+                                + " -> "
+                                + primitive.mappedName()
+                                + " | java-type="
+                                + primitive.javaType().getTypeName()
+                                + " | expression-type="
+                                + primitive.expressionType()
+                );
+
+                continue;
+            }
+
+            if (property
+                    instanceof NavigationPropertyMetadata<?, ?> navigation) {
+
+                System.out.println(
+                        "  NAVIGATION "
+                                + navigation.externalName()
+                                + " -> "
+                                + navigation.mappedName()
+                                + " | cardinality="
+                                + navigation.cardinality()
+                                + " | target="
+                                + navigation.targetMetadata().name()
+                                + " | target-type="
+                                + navigation.javaType().getTypeName()
+                                + " | default-join="
+                                + navigation.defaultJoinType()
+                                + " | join-policy="
+                                + (
+                                navigation.isJoinTypeOverridable()
+                                        ? "OVERRIDABLE"
+                                        : "FIXED"
+                        )
+                );
+            }
+        }
+
+        System.out.println();
+    }
 
     private static void demonstrateFilter(
-            EntitySchema caseSchema,
-            SchemaRegistry registry
+            EntityMetadata<CaseModel> caseMetadata
     ) {
         String filterText =
                 "contains(Title, 'urgent') "
@@ -96,12 +264,12 @@ public final class Main {
                         + "and Reviewer/Email eq 'reviewer@example.com' "
                         + "and Department/Enabled eq true";
 
-        printInput(
+        printOptionInput(
                 "$filter",
                 filterText
         );
 
-        FilterExpression parsedFilterExpression =
+        FilterExpression parsedExpression =
                 new FilterParser(filterText).parse();
 
         FilterAstPrinter printer =
@@ -109,28 +277,22 @@ public final class Main {
 
         printOutputBlock(
                 "UNRESOLVED FILTER AST",
-                printer.print(parsedFilterExpression)
+                printer.print(parsedExpression)
         );
 
-        FilterExpression resolvedFilterExpression =
+        FilterExpression resolvedExpression =
                 new FilterExpressionResolver(
-                        caseSchema,
-                        registry
-                ).resolve(parsedFilterExpression);
+                        caseMetadata
+                ).resolve(parsedExpression);
 
         printOutputBlock(
-                "RESOLVED FILTER AST",
-                printer.print(resolvedFilterExpression)
+                "RESOLVED FILTER AST USING CONNECTED METADATA",
+                printer.print(resolvedExpression)
         );
     }
 
-    // -------------------------------------------------------------------------
-    // $orderby
-    // -------------------------------------------------------------------------
-
     private static void demonstrateOrderBy(
-            EntitySchema caseSchema,
-            SchemaRegistry registry
+            EntityMetadata<CaseModel> caseMetadata
     ) {
         String orderByText =
                 "Title, "
@@ -138,7 +300,7 @@ public final class Main {
                         + "Owner/Department/Code asc, "
                         + "Id desc";
 
-        printInput(
+        printOptionInput(
                 "$orderby",
                 orderByText
         );
@@ -156,19 +318,28 @@ public final class Main {
 
         OrderByOption resolvedOption =
                 new OrderByResolver(
-                        caseSchema,
-                        registry
+                        caseMetadata
                 ).resolve(parsedOption);
 
         printOutputBlock(
-                "RESOLVED ORDER-BY AST",
+                "RESOLVED ORDER-BY AST USING CONNECTED METADATA",
                 printer.print(resolvedOption)
         );
-    }
 
-    // -------------------------------------------------------------------------
-    // $search
-    // -------------------------------------------------------------------------
+        printSmallHeader("RESOLVED ORDER-BY ITEMS");
+
+        for (OrderByItem item : resolvedOption) {
+            System.out.println(
+                    item.externalPath()
+                            + " -> "
+                            + item.mappedPath().orElseThrow()
+                            + " | direction="
+                            + item.direction()
+                            + " | type="
+                            + item.expressionType().orElseThrow()
+            );
+        }
+    }
 
     private static void demonstrateSearch() {
         String searchText =
@@ -176,7 +347,7 @@ public final class Main {
                         + "(\"payment problem\" OR invoice) "
                         + "NOT archived";
 
-        printInput(
+        printOptionInput(
                 "$search",
                 searchText
         );
@@ -195,6 +366,103 @@ public final class Main {
         printOutputBlock(
                 "SEARCH AST",
                 printer.print(expression)
+        );
+    }
+
+    private static void demonstrateExpectedFailures(
+            EntityMetadata<CaseModel> caseMetadata
+    ) {
+        printMainHeader("EXPECTED FAILURE CHECKS");
+
+        expectFailure(
+                "$filter rejects an unknown metadata property",
+                () -> {
+                    FilterExpression expression =
+                            new FilterParser(
+                                    "UnknownProperty eq 'test'"
+                            ).parse();
+
+                    new FilterExpressionResolver(
+                            caseMetadata
+                    ).resolve(expression);
+                }
+        );
+
+        expectFailure(
+                "$filter rejects traversal through a primitive property",
+                () -> {
+                    FilterExpression expression =
+                            new FilterParser(
+                                    "Title/Value eq 'test'"
+                            ).parse();
+
+                    new FilterExpressionResolver(
+                            caseMetadata
+                    ).resolve(expression);
+                }
+        );
+
+        expectFailure(
+                "$filter rejects a navigation property as the final scalar value",
+                () -> {
+                    FilterExpression expression =
+                            new FilterParser(
+                                    "Owner eq null"
+                            ).parse();
+
+                    new FilterExpressionResolver(
+                            caseMetadata
+                    ).resolve(expression);
+                }
+        );
+
+        expectFailure(
+                "$orderby rejects an unknown metadata property",
+                () -> {
+                    OrderByOption option =
+                            new OrderByParser(
+                                    "UnknownProperty desc"
+                            ).parse();
+
+                    new OrderByResolver(
+                            caseMetadata
+                    ).resolve(option);
+                }
+        );
+
+        expectFailure(
+                "$orderby rejects a navigation property as the final segment",
+                () -> {
+                    OrderByOption option =
+                            new OrderByParser(
+                                    "Owner asc"
+                            ).parse();
+
+                    new OrderByResolver(
+                            caseMetadata
+                    ).resolve(option);
+                }
+        );
+
+        expectFailure(
+                "$search rejects an incomplete OR expression",
+                () -> new SearchParser(
+                        "urgent OR"
+                ).parse()
+        );
+
+        expectFailure(
+                "$search rejects empty parentheses",
+                () -> new SearchParser(
+                        "urgent AND ()"
+                ).parse()
+        );
+
+        expectFailure(
+                "$search rejects lowercase operators",
+                () -> new SearchParser(
+                        "urgent and invoice"
+                ).parse()
         );
     }
 
@@ -227,73 +495,88 @@ public final class Main {
         System.out.println();
     }
 
-    // -------------------------------------------------------------------------
-    // Expected failure checks
-    // -------------------------------------------------------------------------
-
-    private static void demonstrateExpectedFailures(
-            EntitySchema caseSchema,
-            SchemaRegistry registry
+    private static <O, T>
+    NavigationPropertyMetadata<O, T> requireNavigation(
+            EntityMetadata<O> ownerMetadata,
+            String externalName,
+            Class<T> expectedTargetType
     ) {
-        printMainHeader("EXPECTED FAILURE CHECKS");
+        PropertyMetadata<O, ?> property =
+                ownerMetadata.requireProperty(externalName);
 
-        expectFailure(
-                "$filter rejects unknown properties",
-                () -> {
-                    FilterExpression filterExpression =
-                            new FilterParser(
-                                    "UnknownProperty eq 'test'"
-                            ).parse();
+        if (!(property
+                instanceof NavigationPropertyMetadata<?, ?> navigation)) {
 
-                    new FilterExpressionResolver(
-                            caseSchema,
-                            registry
-                    ).resolve(filterExpression);
-                }
-        );
+            throw new IllegalStateException(
+                    "Property '"
+                            + ownerMetadata.name()
+                            + "."
+                            + externalName
+                            + "' is not a navigation property"
+            );
+        }
 
-        expectFailure(
-                "$orderby rejects functions",
-                () -> new OrderByParser(
-                        "tolower(Title) asc"
-                ).parse()
-        );
+        if (!expectedTargetType.equals(
+                navigation.javaType()
+        )) {
+            throw new IllegalStateException(
+                    "Navigation property '"
+                            + ownerMetadata.name()
+                            + "."
+                            + externalName
+                            + "' targets Java type '"
+                            + navigation.javaType().getName()
+                            + "' instead of expected type '"
+                            + expectedTargetType.getName()
+                            + "'"
+            );
+        }
 
-        expectFailure(
-                "$orderby rejects unknown properties",
-                () -> {
-                    OrderByOption option =
-                            new OrderByParser(
-                                    "UnknownProperty desc"
-                            ).parse();
+        @SuppressWarnings("unchecked")
+        NavigationPropertyMetadata<O, T> typedNavigation =
+                (NavigationPropertyMetadata<O, T>) navigation;
 
-                    new OrderByResolver(
-                            caseSchema,
-                            registry
-                    ).resolve(option);
-                }
-        );
+        return typedNavigation;
+    }
 
-        expectFailure(
-                "$search rejects incomplete OR expressions",
-                () -> new SearchParser(
-                        "urgent OR"
-                ).parse()
-        );
+    private static void runSuccessfulCheck(
+            String description,
+            Runnable operation
+    ) {
+        printMainHeader(description);
 
-        expectFailure(
-                "$search rejects empty parentheses",
-                () -> new SearchParser(
-                        "urgent AND ()"
-                ).parse()
-        );
+        try {
+            operation.run();
 
-        expectFailure(
-                "$search rejects lowercase operators",
-                () -> new SearchParser(
-                        "urgent and invoice"
-                ).parse()
-        );
+            passedChecks++;
+
+            System.out.println();
+            System.out.println(
+                    "[PASS] "
+                            + description
+                            + " completed successfully."
+            );
+        } catch (RuntimeException exception) {
+            failedChecks++;
+
+            System.out.println();
+            System.out.println(
+                    "[FAIL] "
+                            + description
+            );
+
+            System.out.println(
+                    "Exception: "
+                            + exception.getClass().getName()
+            );
+
+            System.out.println(
+                    "Message: "
+                            + exception.getMessage()
+            );
+
+            exception.printStackTrace(System.out);
+        }
     }
 
     private static void expectFailure(
@@ -315,7 +598,7 @@ public final class Main {
             passedChecks++;
 
             System.out.println(
-                    "[PASS] Expression was rejected as expected."
+                    "[PASS] Input was rejected as expected."
             );
 
             System.out.println(
@@ -330,67 +613,31 @@ public final class Main {
         }
     }
 
-    // -------------------------------------------------------------------------
-    // Demo execution
-    // -------------------------------------------------------------------------
-
-    private static void runSuccessfulDemo(
+    private static void verify(
             String description,
-            Runnable demonstration
+            boolean condition
     ) {
-        printMainHeader(description);
-
-        try {
-            demonstration.run();
-
-            passedChecks++;
-
-            System.out.println(
-                    "[PASS] "
+        if (!condition) {
+            throw new IllegalStateException(
+                    "Metadata graph check failed: "
                             + description
-                            + " completed successfully."
             );
-        } catch (RuntimeException exception) {
-            failedChecks++;
-
-            System.out.println(
-                    "[FAIL] "
-                            + description
-                            + " failed."
-            );
-
-            System.out.println(
-                    "Exception: "
-                            + exception.getClass().getName()
-            );
-
-            System.out.println(
-                    "Message: "
-                            + exception.getMessage()
-            );
-
-            System.out.println();
-            exception.printStackTrace(System.out);
         }
-    }
 
-    // -------------------------------------------------------------------------
-    // Visual formatting
-    // -------------------------------------------------------------------------
+        System.out.println(
+                "[PASS] " + description
+        );
+    }
 
     private static void printApplicationHeader() {
         System.out.println();
         System.out.println("=".repeat(OUTPUT_WIDTH));
         System.out.println(
                 centerText(
-                        "ODATA QUERY-OPTION PARSER PLAYGROUND"
+                        "ODATA PARSER — CONNECTED METADATA SYSTEM"
                 )
         );
         System.out.println("=".repeat(OUTPUT_WIDTH));
-        System.out.println();
-        System.out.println(
-                "Visual demonstrations for $filter, $orderby and $search"
-        );
     }
 
     private static void printMainHeader(
@@ -400,12 +647,20 @@ public final class Main {
         System.out.println();
         System.out.println("=".repeat(OUTPUT_WIDTH));
         System.out.println(
-                centerText(title.toUpperCase())
+                centerText(
+                        title.toUpperCase()
+                )
         );
         System.out.println("=".repeat(OUTPUT_WIDTH));
     }
 
-    private static void printInput(
+    private static void printInputHeader(
+            String title
+    ) {
+        printSmallHeader(title);
+    }
+
+    private static void printOptionInput(
             String optionName,
             String value
     ) {
@@ -474,7 +729,7 @@ public final class Main {
         System.out.println();
         System.out.println("=".repeat(OUTPUT_WIDTH));
         System.out.println(
-                centerText("DEMO SUMMARY")
+                centerText("TEST SUMMARY")
         );
         System.out.println("=".repeat(OUTPUT_WIDTH));
 
@@ -494,11 +749,11 @@ public final class Main {
 
         if (failedChecks == 0) {
             System.out.println(
-                    "[SUCCESS] All visual checks completed successfully."
+                    "[SUCCESS] The connected metadata system works correctly."
             );
         } else {
             System.out.println(
-                    "[WARNING] One or more visual checks failed."
+                    "[WARNING] One or more checks failed."
             );
         }
 

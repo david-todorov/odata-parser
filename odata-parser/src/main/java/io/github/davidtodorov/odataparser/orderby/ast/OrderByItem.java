@@ -2,7 +2,7 @@ package io.github.davidtodorov.odataparser.orderby.ast;
 
 import io.github.davidtodorov.odataparser.common.metadata.SourceSpan;
 import io.github.davidtodorov.odataparser.common.type.ExpressionType;
-import io.github.davidtodorov.odataparser.schema.ResolvedPropertyPath;
+import io.github.davidtodorov.odataparser.meta.path.ResolvedMetadataPath;
 
 import java.util.List;
 import java.util.Objects;
@@ -11,7 +11,7 @@ import java.util.Optional;
 public record OrderByItem(
         List<String> pathSegments,
         OrderByDirection direction,
-        Optional<ResolvedPropertyPath> resolvedPath,
+        Optional<ResolvedMetadataPath> resolvedPath,
         SourceSpan sourceSpan
 ) {
 
@@ -53,7 +53,7 @@ public record OrderByItem(
 
         Objects.requireNonNull(
                 resolvedPath,
-                "Resolved order-by path cannot be null"
+                "Resolved order-by metadata path cannot be null"
         );
 
         Objects.requireNonNull(
@@ -71,7 +71,8 @@ public record OrderByItem(
              index < pathSegments.size();
              index++) {
 
-            String segment = pathSegments.get(index);
+            String segment =
+                    pathSegments.get(index);
 
             if (segment == null || segment.isBlank()) {
                 throw new IllegalArgumentException(
@@ -82,19 +83,25 @@ public record OrderByItem(
             }
         }
 
-        pathSegments = List.copyOf(pathSegments);
+        pathSegments =
+                List.copyOf(pathSegments);
 
-        List<String> finalPathSegments = pathSegments;
-        resolvedPath.ifPresent(path ->
-                validateResolvedPath(
-                        finalPathSegments,
+        List<String> validatedPathSegments =
+                pathSegments;
+
+        resolvedPath.ifPresent(
+                path -> validateResolvedPath(
+                        validatedPathSegments,
                         path
                 )
         );
     }
 
     public String externalPath() {
-        return String.join("/", pathSegments);
+        return String.join(
+                "/",
+                pathSegments
+        );
     }
 
     public boolean isResolved() {
@@ -103,49 +110,54 @@ public record OrderByItem(
 
     public Optional<String> mappedPath() {
         return resolvedPath.map(
-                ResolvedPropertyPath::mappedPath
+                ResolvedMetadataPath::mappedPath
         );
     }
 
     public Optional<ExpressionType> expressionType() {
         return resolvedPath.map(
-                ResolvedPropertyPath::expressionType
+                ResolvedMetadataPath::expressionType
         );
     }
 
     public Optional<Class<?>> javaType() {
         return resolvedPath.map(
-                ResolvedPropertyPath::javaType
+                ResolvedMetadataPath::javaType
         );
     }
 
     public OrderByItem withResolvedPath(
-            ResolvedPropertyPath resolvedPropertyPath
+            ResolvedMetadataPath resolvedMetadataPath
     ) {
         Objects.requireNonNull(
-                resolvedPropertyPath,
-                "Resolved property path cannot be null"
+                resolvedMetadataPath,
+                "Resolved metadata path cannot be null"
         );
 
         return new OrderByItem(
                 pathSegments,
                 direction,
-                Optional.of(resolvedPropertyPath),
+                Optional.of(
+                        resolvedMetadataPath
+                ),
                 sourceSpan
         );
     }
 
     private static void validateResolvedPath(
             List<String> pathSegments,
-            ResolvedPropertyPath resolvedPath
+            ResolvedMetadataPath resolvedPath
     ) {
         if (!pathSegments.equals(
                 resolvedPath.externalSegments()
         )) {
             throw new IllegalArgumentException(
-                    "Resolved property path does not match the order-by item. "
+                    "Resolved metadata path does not match the order-by item. "
                             + "Order-by path: '"
-                            + String.join("/", pathSegments)
+                            + String.join(
+                            "/",
+                            pathSegments
+                    )
                             + "', resolved path: '"
                             + resolvedPath.externalPath()
                             + "'"

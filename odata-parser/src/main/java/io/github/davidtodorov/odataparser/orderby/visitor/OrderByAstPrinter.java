@@ -1,10 +1,10 @@
 package io.github.davidtodorov.odataparser.orderby.visitor;
 
 import io.github.davidtodorov.odataparser.common.metadata.SourceSpan;
+import io.github.davidtodorov.odataparser.meta.path.ResolvedMetadataPath;
+import io.github.davidtodorov.odataparser.meta.path.ResolvedMetadataPathSegment;
 import io.github.davidtodorov.odataparser.orderby.ast.OrderByItem;
 import io.github.davidtodorov.odataparser.orderby.ast.OrderByOption;
-import io.github.davidtodorov.odataparser.schema.ResolvedPathSegment;
-import io.github.davidtodorov.odataparser.schema.ResolvedPropertyPath;
 
 import java.util.Objects;
 
@@ -14,13 +14,16 @@ public final class OrderByAstPrinter {
     private static final String LINE_SEPARATOR =
             System.lineSeparator();
 
-    public String print(OrderByOption option) {
+    public String print(
+            OrderByOption option
+    ) {
         Objects.requireNonNull(
                 option,
                 "Order-by option cannot be null"
         );
 
-        StringBuilder output = new StringBuilder();
+        StringBuilder output =
+                new StringBuilder();
 
         output.append("ORDER BY")
                 .append(" | items=")
@@ -33,7 +36,9 @@ public final class OrderByAstPrinter {
                 )
                 .append(" | span=")
                 .append(
-                        formatSpan(option.sourceSpan())
+                        formatSpan(
+                                option.sourceSpan()
+                        )
                 );
 
         for (int index = 0;
@@ -58,7 +63,8 @@ public final class OrderByAstPrinter {
             OrderByItem item,
             int index
     ) {
-        StringBuilder output = new StringBuilder();
+        StringBuilder output =
+                new StringBuilder();
 
         output.append("ITEM ")
                 .append(index + 1)
@@ -68,7 +74,9 @@ public final class OrderByAstPrinter {
                 .append(item.direction().keyword())
                 .append(" | span=")
                 .append(
-                        formatSpan(item.sourceSpan())
+                        formatSpan(
+                                item.sourceSpan()
+                        )
                 );
 
         output.append(LINE_SEPARATOR)
@@ -91,19 +99,21 @@ public final class OrderByAstPrinter {
                         )
                 );
 
-        if (item.resolvedPath().isPresent()) {
-            appendResolvedPathDetails(
-                    output,
-                    item.resolvedPath().orElseThrow()
-            );
-        }
+        item.resolvedPath()
+                .ifPresent(
+                        resolvedPath ->
+                                appendResolvedPathDetails(
+                                        output,
+                                        resolvedPath
+                                )
+                );
 
         return output.toString();
     }
 
     private void appendResolvedPathDetails(
             StringBuilder output,
-            ResolvedPropertyPath resolvedPath
+            ResolvedMetadataPath resolvedPath
     ) {
         output.append(LINE_SEPARATOR)
                 .append(
@@ -133,17 +143,29 @@ public final class OrderByAstPrinter {
 
         output.append(LINE_SEPARATOR)
                 .append(
+                        indent(
+                                "root-metadata="
+                                        + resolvedPath
+                                        .rootMetadata()
+                                        .name()
+                        )
+                );
+
+        output.append(LINE_SEPARATOR)
+                .append(
                         indent("segments:")
                 );
 
-        for (ResolvedPathSegment segment
+        for (ResolvedMetadataPathSegment segment
                 : resolvedPath.segments()) {
 
             output.append(LINE_SEPARATOR)
                     .append(
                             indent(
                                     indent(
-                                            describeSegment(segment)
+                                            describeSegment(
+                                                    segment
+                                            )
                                     )
                             )
                     );
@@ -151,7 +173,7 @@ public final class OrderByAstPrinter {
     }
 
     private String describeSegment(
-            ResolvedPathSegment segment
+            ResolvedMetadataPathSegment segment
     ) {
         StringBuilder description =
                 new StringBuilder();
@@ -165,32 +187,69 @@ public final class OrderByAstPrinter {
                 )
                 .append(" | declared-in=")
                 .append(
-                        segment.declaringSchemaName()
+                        segment.declaringMetadataName()
+                )
+                .append(" | declaring-type=")
+                .append(
+                        segment.declaringEntityType()
+                                .getTypeName()
                 )
                 .append(" | kind=")
                 .append(
                         segment.kind()
                 )
-                .append(" | cardinality=")
-                .append(
-                        segment.cardinality()
-                )
                 .append(" | java-type=")
                 .append(
-                        segment.javaType().getTypeName()
+                        segment.javaType()
+                                .getTypeName()
+                );
+
+        segment.cardinality()
+                .ifPresent(
+                        cardinality ->
+                                description
+                                        .append(" | cardinality=")
+                                        .append(cardinality)
                 );
 
         segment.expressionType()
-                .ifPresent(type ->
-                        description.append(" | type=")
-                                .append(type)
+                .ifPresent(
+                        expressionType ->
+                                description
+                                        .append(" | type=")
+                                        .append(expressionType)
                 );
 
-        segment.targetSchemaName()
-                .ifPresent(targetSchema ->
-                        description
-                                .append(" | target-schema=")
-                                .append(targetSchema)
+        segment.targetMetadata()
+                .ifPresent(
+                        targetMetadata ->
+                                description
+                                        .append(" | target-metadata=")
+                                        .append(
+                                                targetMetadata.name()
+                                        )
+                                        .append(" | target-type=")
+                                        .append(
+                                                targetMetadata
+                                                        .entityType()
+                                                        .getTypeName()
+                                        )
+                );
+
+        segment.joinPolicy()
+                .ifPresent(
+                        joinPolicy ->
+                                description
+                                        .append(" | default-join=")
+                                        .append(
+                                                joinPolicy.defaultJoinType()
+                                        )
+                                        .append(" | join-policy=")
+                                        .append(
+                                                joinPolicy.overridable()
+                                                        ? "OVERRIDABLE"
+                                                        : "FIXED"
+                                        )
                 );
 
         return description.toString();
@@ -210,9 +269,14 @@ public final class OrderByAstPrinter {
                 + ")";
     }
 
-    private String indent(String text) {
+    private String indent(
+            String text
+    ) {
         return text.lines()
-                .map(line -> INDENTATION + line)
+                .map(
+                        line ->
+                                INDENTATION + line
+                )
                 .reduce(
                         (left, right) ->
                                 left

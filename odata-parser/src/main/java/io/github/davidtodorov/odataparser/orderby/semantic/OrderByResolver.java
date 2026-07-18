@@ -1,11 +1,10 @@
 package io.github.davidtodorov.odataparser.orderby.semantic;
 
+import io.github.davidtodorov.odataparser.meta.EntityMetadata;
+import io.github.davidtodorov.odataparser.meta.path.ResolvedMetadataPath;
+import io.github.davidtodorov.odataparser.meta.resolver.MetadataPropertyPathResolver;
 import io.github.davidtodorov.odataparser.orderby.ast.OrderByItem;
 import io.github.davidtodorov.odataparser.orderby.ast.OrderByOption;
-import io.github.davidtodorov.odataparser.schema.EntitySchema;
-import io.github.davidtodorov.odataparser.schema.ResolvedPropertyPath;
-import io.github.davidtodorov.odataparser.schema.SchemaRegistry;
-import io.github.davidtodorov.odataparser.schema.resolver.PropertyPathResolver;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,33 +12,23 @@ import java.util.Objects;
 
 public final class OrderByResolver {
 
-    private final PropertyPathResolver propertyPathResolver;
-
-    public OrderByResolver(EntitySchema rootSchema) {
-        this(
-                rootSchema,
-                SchemaRegistry.of(rootSchema)
-        );
-    }
+    private final MetadataPropertyPathResolver propertyPathResolver;
 
     public OrderByResolver(
-            EntitySchema rootSchema,
-            SchemaRegistry schemaRegistry
+            EntityMetadata<?> rootMetadata
     ) {
         this.propertyPathResolver =
-                new PropertyPathResolver(
+                new MetadataPropertyPathResolver(
                         Objects.requireNonNull(
-                                rootSchema,
-                                "Root entity schema cannot be null"
-                        ),
-                        Objects.requireNonNull(
-                                schemaRegistry,
-                                "Schema registry cannot be null"
+                                rootMetadata,
+                                "Root entity metadata cannot be null"
                         )
                 );
     }
 
-    public OrderByOption resolve(OrderByOption option) {
+    public OrderByOption resolve(
+            OrderByOption option
+    ) {
         Objects.requireNonNull(
                 option,
                 "Order-by option cannot be null"
@@ -68,7 +57,7 @@ public final class OrderByResolver {
         );
 
         try {
-            ResolvedPropertyPath resolvedPath =
+            ResolvedMetadataPath resolvedPath =
                     propertyPathResolver.resolve(
                             item.pathSegments()
                     );
@@ -76,7 +65,6 @@ public final class OrderByResolver {
             return item.withResolvedPath(
                     resolvedPath
             );
-
         } catch (IllegalArgumentException exception) {
             throw new OrderBySemanticException(
                     exception.getMessage(),

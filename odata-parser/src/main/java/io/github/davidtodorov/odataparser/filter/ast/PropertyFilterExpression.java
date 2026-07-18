@@ -1,8 +1,8 @@
 package io.github.davidtodorov.odataparser.filter.ast;
 
-import io.github.davidtodorov.odataparser.filter.metadata.ExpressionMetadata;
 import io.github.davidtodorov.odataparser.common.metadata.SourceSpan;
-import io.github.davidtodorov.odataparser.schema.ResolvedPropertyPath;
+import io.github.davidtodorov.odataparser.filter.metadata.ExpressionMetadata;
+import io.github.davidtodorov.odataparser.meta.path.ResolvedMetadataPath;
 
 import java.util.List;
 import java.util.Objects;
@@ -10,16 +10,19 @@ import java.util.Optional;
 
 public record PropertyFilterExpression(
         List<String> pathSegments,
-        Optional<ResolvedPropertyPath> resolvedPath,
+        Optional<ResolvedMetadataPath> resolvedPath,
         ExpressionMetadata metadata
 ) implements FilterExpression {
 
-
-    public PropertyFilterExpression(List<String> pathSegments) {
+    public PropertyFilterExpression(
+            List<String> pathSegments
+    ) {
         this(
                 pathSegments,
                 Optional.empty(),
-                ExpressionMetadata.unresolved(SourceSpan.unknown())
+                ExpressionMetadata.unresolved(
+                        SourceSpan.unknown()
+                )
         );
     }
 
@@ -42,7 +45,7 @@ public record PropertyFilterExpression(
 
         Objects.requireNonNull(
                 resolvedPath,
-                "Resolved property path cannot be null"
+                "Resolved metadata path cannot be null"
         );
 
         Objects.requireNonNull(
@@ -57,7 +60,8 @@ public record PropertyFilterExpression(
         }
 
         if (pathSegments.stream().anyMatch(
-                segment -> segment == null || segment.isBlank()
+                segment -> segment == null
+                        || segment.isBlank()
         )) {
             throw new IllegalArgumentException(
                     "Property path segments cannot be null or blank"
@@ -66,10 +70,12 @@ public record PropertyFilterExpression(
 
         pathSegments = List.copyOf(pathSegments);
 
-        List<String> finalPathSegments = pathSegments;
-        resolvedPath.ifPresent(path ->
-                validateResolvedPath(
-                        finalPathSegments,
+        List<String> validatedPathSegments =
+                pathSegments;
+
+        resolvedPath.ifPresent(
+                path -> validateResolvedPath(
+                        validatedPathSegments,
                         path,
                         metadata
                 )
@@ -77,7 +83,10 @@ public record PropertyFilterExpression(
     }
 
     public String path() {
-        return String.join("/", pathSegments);
+        return String.join(
+                "/",
+                pathSegments
+        );
     }
 
     public boolean isResolved() {
@@ -85,24 +94,28 @@ public record PropertyFilterExpression(
     }
 
     public PropertyFilterExpression withResolvedPath(
-            ResolvedPropertyPath resolvedPropertyPath
+            ResolvedMetadataPath resolvedMetadataPath
     ) {
         Objects.requireNonNull(
-                resolvedPropertyPath,
-                "Resolved property path cannot be null"
+                resolvedMetadataPath,
+                "Resolved metadata path cannot be null"
         );
 
         return new PropertyFilterExpression(
                 pathSegments,
-                Optional.of(resolvedPropertyPath),
+                Optional.of(
+                        resolvedMetadataPath
+                ),
                 metadata.withType(
-                        resolvedPropertyPath.expressionType()
+                        resolvedMetadataPath.expressionType()
                 )
         );
     }
 
     @Override
-    public <R> R accept(FilterExpressionVisitor<R> visitor) {
+    public <R> R accept(
+            FilterExpressionVisitor<R> visitor
+    ) {
         Objects.requireNonNull(
                 visitor,
                 "Expression visitor cannot be null"
@@ -113,14 +126,19 @@ public record PropertyFilterExpression(
 
     private static void validateResolvedPath(
             List<String> pathSegments,
-            ResolvedPropertyPath resolvedPath,
+            ResolvedMetadataPath resolvedPath,
             ExpressionMetadata metadata
     ) {
-        if (!pathSegments.equals(resolvedPath.externalSegments())) {
+        if (!pathSegments.equals(
+                resolvedPath.externalSegments()
+        )) {
             throw new IllegalArgumentException(
                     "Resolved path does not match the property expression. "
                             + "Expression path: "
-                            + String.join("/", pathSegments)
+                            + String.join(
+                            "/",
+                            pathSegments
+                    )
                             + ", resolved path: "
                             + resolvedPath.externalPath()
             );
@@ -128,6 +146,7 @@ public record PropertyFilterExpression(
 
         if (metadata.expressionType()
                 != resolvedPath.expressionType()) {
+
             throw new IllegalArgumentException(
                     "Property expression type "
                             + metadata.expressionType()

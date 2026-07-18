@@ -1,5 +1,6 @@
 package io.github.davidtodorov.odataparser.filter.visitor;
 
+import io.github.davidtodorov.odataparser.common.metadata.SourceSpan;
 import io.github.davidtodorov.odataparser.filter.ast.BinaryFilterExpression;
 import io.github.davidtodorov.odataparser.filter.ast.FilterExpression;
 import io.github.davidtodorov.odataparser.filter.ast.FilterExpressionVisitor;
@@ -8,22 +9,25 @@ import io.github.davidtodorov.odataparser.filter.ast.ListFilterExpression;
 import io.github.davidtodorov.odataparser.filter.ast.LiteralFilterExpression;
 import io.github.davidtodorov.odataparser.filter.ast.PropertyFilterExpression;
 import io.github.davidtodorov.odataparser.filter.ast.UnaryFilterExpression;
-import io.github.davidtodorov.odataparser.common.metadata.SourceSpan;
-import io.github.davidtodorov.odataparser.schema.ResolvedPathSegment;
-import io.github.davidtodorov.odataparser.schema.ResolvedPropertyPath;
+import io.github.davidtodorov.odataparser.meta.path.ResolvedMetadataPath;
+import io.github.davidtodorov.odataparser.meta.path.ResolvedMetadataPathSegment;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
-public final class FilterAstPrinter implements FilterExpressionVisitor<String> {
+public final class FilterAstPrinter
+        implements FilterExpressionVisitor<String> {
 
     private static final String INDENTATION = "  ";
+
     private static final String LINE_SEPARATOR =
             System.lineSeparator();
 
-    public String print(FilterExpression root) {
+    public String print(
+            FilterExpression root
+    ) {
         Objects.requireNonNull(
                 root,
                 "Root expression cannot be null"
@@ -37,7 +41,8 @@ public final class FilterAstPrinter implements FilterExpressionVisitor<String> {
             BinaryFilterExpression expression
     ) {
         String title =
-                "BINARY " + expression.operator().keyword();
+                "BINARY "
+                        + expression.operator().keyword();
 
         return renderNode(
                 title,
@@ -52,7 +57,8 @@ public final class FilterAstPrinter implements FilterExpressionVisitor<String> {
             UnaryFilterExpression expression
     ) {
         String title =
-                "UNARY " + expression.operator().keyword();
+                "UNARY "
+                        + expression.operator().keyword();
 
         return renderNode(
                 title,
@@ -72,9 +78,13 @@ public final class FilterAstPrinter implements FilterExpressionVisitor<String> {
                         + " "
                         + expression.rawText();
 
-        List<String> details = List.of(
-                "value=" + formatValue(expression.value())
-        );
+        List<String> details =
+                List.of(
+                        "value="
+                                + formatValue(
+                                expression.value()
+                        )
+                );
 
         return renderNode(
                 title,
@@ -89,7 +99,8 @@ public final class FilterAstPrinter implements FilterExpressionVisitor<String> {
             PropertyFilterExpression expression
     ) {
         String title =
-                "PROPERTY " + expression.path();
+                "PROPERTY "
+                        + expression.path();
 
         return renderNode(
                 title,
@@ -104,12 +115,14 @@ public final class FilterAstPrinter implements FilterExpressionVisitor<String> {
             FunctionCallFilterExpression expression
     ) {
         String title =
-                "FUNCTION " + expression.functionName();
+                "FUNCTION "
+                        + expression.functionName();
 
-        List<String> details = List.of(
-                "argument-count="
-                        + expression.arguments().size()
-        );
+        List<String> details =
+                List.of(
+                        "argument-count="
+                                + expression.arguments().size()
+                );
 
         return renderNode(
                 title,
@@ -123,10 +136,11 @@ public final class FilterAstPrinter implements FilterExpressionVisitor<String> {
     public String visitListExpression(
             ListFilterExpression expression
     ) {
-        List<String> details = List.of(
-                "element-count="
-                        + expression.elements().size()
-        );
+        List<String> details =
+                List.of(
+                        "element-count="
+                                + expression.elements().size()
+                );
 
         return renderNode(
                 "LIST",
@@ -138,17 +152,22 @@ public final class FilterAstPrinter implements FilterExpressionVisitor<String> {
 
     private String renderNode(
             String title,
-            FilterExpression filterExpression,
+            FilterExpression expression,
             List<String> details,
             List<FilterExpression> children
     ) {
-        StringBuilder output = new StringBuilder();
+        StringBuilder output =
+                new StringBuilder();
 
         output.append(title)
                 .append(" | type=")
-                .append(filterExpression.expressionType())
+                .append(expression.expressionType())
                 .append(" | span=")
-                .append(formatSpan(filterExpression.sourceSpan()));
+                .append(
+                        formatSpan(
+                                expression.sourceSpan()
+                        )
+                );
 
         for (String detail : details) {
             output.append(LINE_SEPARATOR)
@@ -157,7 +176,11 @@ public final class FilterAstPrinter implements FilterExpressionVisitor<String> {
 
         for (FilterExpression child : children) {
             output.append(LINE_SEPARATOR)
-                    .append(indent(child.accept(this)));
+                    .append(
+                            indent(
+                                    child.accept(this)
+                            )
+                    );
         }
 
         return output.toString();
@@ -166,30 +189,55 @@ public final class FilterAstPrinter implements FilterExpressionVisitor<String> {
     private List<String> createPropertyDetails(
             PropertyFilterExpression expression
     ) {
-        List<String> details = new ArrayList<>();
+        List<String> details =
+                new ArrayList<>();
 
-        Optional<ResolvedPropertyPath> resolvedPath =
+        Optional<ResolvedMetadataPath> resolvedPath =
                 expression.resolvedPath();
 
         if (resolvedPath.isEmpty()) {
-            details.add("resolution=UNRESOLVED");
+            details.add(
+                    "resolution=UNRESOLVED"
+            );
+
             return List.copyOf(details);
         }
 
-        ResolvedPropertyPath path = resolvedPath.get();
+        ResolvedMetadataPath path =
+                resolvedPath.get();
 
-        details.add("resolution=RESOLVED");
-        details.add("external-path=" + path.externalPath());
-        details.add("mapped-path=" + path.mappedPath());
         details.add(
-                "java-type=" + path.javaType().getTypeName()
+                "resolution=RESOLVED"
+        );
+
+        details.add(
+                "external-path="
+                        + path.externalPath()
+        );
+
+        details.add(
+                "mapped-path="
+                        + path.mappedPath()
+        );
+
+        details.add(
+                "java-type="
+                        + path.javaType().getTypeName()
+        );
+
+        details.add(
+                "root-metadata="
+                        + path.rootMetadata().name()
         );
 
         details.add("segments:");
 
-        for (ResolvedPathSegment segment : path.segments()) {
+        for (ResolvedMetadataPathSegment segment
+                : path.segments()) {
+
             details.add(
-                    INDENTATION + describeSegment(segment)
+                    INDENTATION
+                            + describeSegment(segment)
             );
         }
 
@@ -197,36 +245,84 @@ public final class FilterAstPrinter implements FilterExpressionVisitor<String> {
     }
 
     private String describeSegment(
-            ResolvedPathSegment segment
+            ResolvedMetadataPathSegment segment
     ) {
-        StringBuilder description = new StringBuilder();
+        StringBuilder description =
+                new StringBuilder();
 
-        description.append(segment.externalName())
+        description.append(
+                        segment.externalName()
+                )
                 .append(" -> ")
                 .append(segment.mappedName())
                 .append(" | declared-in=")
-                .append(segment.declaringSchemaName())
+                .append(
+                        segment.declaringMetadataName()
+                )
+                .append(" | declaring-type=")
+                .append(
+                        segment.declaringEntityType()
+                                .getTypeName()
+                )
                 .append(" | kind=")
                 .append(segment.kind())
-                .append(" | cardinality=")
-                .append(segment.cardinality())
                 .append(" | java-type=")
-                .append(segment.javaType().getTypeName());
+                .append(
+                        segment.javaType()
+                                .getTypeName()
+                );
 
-        segment.expressionType().ifPresent(type ->
-                description.append(" | type=")
-                        .append(type)
-        );
+        segment.cardinality()
+                .ifPresent(
+                        cardinality ->
+                                description
+                                        .append(" | cardinality=")
+                                        .append(cardinality)
+                );
 
-        segment.targetSchemaName().ifPresent(target ->
-                description.append(" | target-schema=")
-                        .append(target)
-        );
+        segment.expressionType()
+                .ifPresent(
+                        type ->
+                                description
+                                        .append(" | type=")
+                                        .append(type)
+                );
+
+        segment.targetMetadata()
+                .ifPresent(
+                        target ->
+                                description
+                                        .append(" | target-metadata=")
+                                        .append(target.name())
+                                        .append(" | target-type=")
+                                        .append(
+                                                target.entityType()
+                                                        .getTypeName()
+                                        )
+                );
+
+        segment.joinPolicy()
+                .ifPresent(
+                        joinPolicy ->
+                                description
+                                        .append(" | default-join=")
+                                        .append(
+                                                joinPolicy.defaultJoinType()
+                                        )
+                                        .append(" | join-policy=")
+                                        .append(
+                                                joinPolicy.overridable()
+                                                        ? "OVERRIDABLE"
+                                                        : "FIXED"
+                                        )
+                );
 
         return description.toString();
     }
 
-    private String formatSpan(SourceSpan sourceSpan) {
+    private String formatSpan(
+            SourceSpan sourceSpan
+    ) {
         if (sourceSpan.isUnknown()) {
             return "UNKNOWN";
         }
@@ -238,21 +334,30 @@ public final class FilterAstPrinter implements FilterExpressionVisitor<String> {
                 + ")";
     }
 
-    private String formatValue(Object value) {
+    private String formatValue(
+            Object value
+    ) {
         if (value == null) {
             return "null";
         }
 
         if (value instanceof String stringValue) {
-            return "\"" + stringValue + "\"";
+            return "\""
+                    + stringValue
+                    + "\"";
         }
 
         return value.toString();
     }
 
-    private String indent(String text) {
+    private String indent(
+            String text
+    ) {
         return text.lines()
-                .map(line -> INDENTATION + line)
+                .map(
+                        line ->
+                                INDENTATION + line
+                )
                 .reduce(
                         (left, right) ->
                                 left
